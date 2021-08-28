@@ -125,26 +125,17 @@ contract TruDaMul {
 
     function submitPayment(
         bytes memory exID,
-        bytes memory mPayID,
-        bytes memory pPayID,
-        bytes memory senderSignature,
         address mule,
-        bytes memory senderMuleSignature
+        bytes memory pPayID,
+        bytes memory senderSignature
     ) public {
         uint256 exIDIndex = tendersByexID[exID];
         require(exIDIndex > 0, "TruDaMul: Invalid exID");
 
-        // Mule address signature check
-        address extractedSender2 = extractMuleSignature(
-            mule,
-            senderMuleSignature
-        );
-        require(_sender == extractedSender2, "TruDaMul: Invalid signature");
-
         // Payments signature check
         address extractedSender = extractPaymentsSignature(
             exID,
-            mPayID,
+            mule,
             pPayID,
             senderSignature
         );
@@ -155,13 +146,12 @@ contract TruDaMul {
             _openTendersOffers -= t.senderOffer;
             t.fulfilled = true;
         } else {
-            // Mule payment signature check
-            address extractedSender3 = extractMulePaymentSignature(
-                exID,
-                mPayID,
+            // Mule address signature check
+            address extractedSender2 = extractMuleSignature(
+                mule,
                 senderSignature
             );
-            require(_sender == extractedSender3, "TruDaMul: Invalid signature");
+            require(_sender == extractedSender2, "TruDaMul: Invalid signature");
         }
 
         // Allow mule state channel payment
@@ -212,29 +202,12 @@ contract TruDaMul {
      */
     function extractPaymentsSignature(
         bytes memory exID,
-        bytes memory mPayID,
+        address mule,
         bytes memory pPayID,
         bytes memory senderSignature
     ) public pure returns (address) {
         // Compute message hash
-        bytes32 hash = keccak256(abi.encodePacked(exID, mPayID, pPayID));
-
-        // Derive address from signature
-        return
-            ECDSA.recover(ECDSA.toEthSignedMessageHash(hash), senderSignature);
-    }
-
-    /**
-     * @notice Returns the address extracted from payments signature.
-     * @return Address of the payments signer.
-     */
-    function extractMulePaymentSignature(
-        bytes memory exID,
-        bytes memory mPayID,
-        bytes memory senderSignature
-    ) public pure returns (address) {
-        // Compute message hash
-        bytes32 hash = keccak256(abi.encodePacked(exID, mPayID));
+        bytes32 hash = keccak256(abi.encodePacked(exID, mule, pPayID));
 
         // Derive address from signature
         return

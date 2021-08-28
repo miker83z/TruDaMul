@@ -165,6 +165,7 @@ contract('PaymentsChannel', async (accounts) => {
         from: proxy,
       }
     );
+    console.log('Gas submitTender: ', res.receipt.gasUsed);
 
     const res2 = await trudamul.checkPermissions(proxy, exID, { from: proxy });
   });
@@ -220,7 +221,7 @@ contract('PaymentsChannel', async (accounts) => {
       senderSign.substr(0, 130) +
       (senderSign.substr(130) == '00' ? '1b' : '1c');
 
-    await channel.closeChannel(
+    const res = await channel.closeChannel(
       mule,
       blockNumber,
       balance,
@@ -232,13 +233,14 @@ contract('PaymentsChannel', async (accounts) => {
         from: mule,
       }
     );
+
+    console.log('Gas closeChannel: ', res.receipt.gasUsed);
   });
 
   it('mule2 sumbits payments', async () => {
     const token = await MuleToken.deployed();
     const trudamul = await TruDaMul.deployed();
-    const mPayID = web3.utils.asciiToHex('0002');
-    const pPayID = web3.utils.asciiToHex('0003');
+    const pPayID = web3.utils.asciiToHex('0002');
 
     const paymentsHash = web3.utils.soliditySha3(
       {
@@ -246,8 +248,8 @@ contract('PaymentsChannel', async (accounts) => {
         value: exID,
       },
       {
-        type: 'bytes',
-        value: mPayID,
+        type: 'address',
+        value: mule2,
       },
       {
         type: 'bytes',
@@ -259,26 +261,17 @@ contract('PaymentsChannel', async (accounts) => {
       senderPaymentsSignature.substr(0, 130) +
       (senderPaymentsSignature.substr(130) == '00' ? '1b' : '1c');
 
-    const muleHash = web3.utils.soliditySha3({
-      type: 'address',
-      value: mule2,
-    });
-    let senderMuleSignature = await web3.eth.sign(muleHash, sender);
-    senderMuleSignature =
-      senderMuleSignature.substr(0, 130) +
-      (senderMuleSignature.substr(130) == '00' ? '1b' : '1c');
-
     const res = await trudamul.submitPayment(
       exID,
-      mPayID,
+      mule2,
       pPayID,
       senderPaymentsSignature,
-      mule2,
-      senderMuleSignature,
       {
         from: mule2,
       }
     );
+
+    console.log('Gas submitPayment: ', res.receipt.gasUsed);
   });
 
   it('mule2 closes a channel', async () => {
