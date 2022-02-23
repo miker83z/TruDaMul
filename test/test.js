@@ -11,8 +11,11 @@ contract('PaymentsChannel', async (accounts) => {
 
   let blockNumber;
   let blockNumber2;
+  const chainID = 1;
   const exID = web3.utils.asciiToHex('0001');
+  const pPayID = web3.utils.asciiToHex('0002');
   const pURI = web3.utils.asciiToHex('ImmutableURI');
+  const balanceProofHash = web3.utils.asciiToHex('balanceProofHash');
 
   it('releases tokens to the accounts', async () => {
     const token = await MuleToken.deployed();
@@ -44,9 +47,10 @@ contract('PaymentsChannel', async (accounts) => {
     const token = await MuleToken.deployed();
     const channel = await StateChannel.deployed();
 
-    await token.approve(StateChannel.address, 10000, {
+    const res0 = await token.approve(StateChannel.address, 10000, {
       from: sender,
     });
+    console.log('Gas token approve: ', res0.receipt.gasUsed);
     const result = await channel.createChannel(mule, 5000, {
       from: sender,
     });
@@ -55,16 +59,34 @@ contract('PaymentsChannel', async (accounts) => {
       from: sender,
     });
     blockNumber2 = result2.receipt.blockNumber;
+
+    console.log('Gas openChannel: ', result.receipt.gasUsed);
   });
 
   it('mule sumbits a new tender', async () => {
     const token = await MuleToken.deployed();
     const trudamul = await TruDaMul.deployed();
 
+    await token.transfer(TruDaMul.address, 10, {
+      from: sender,
+    });
+
     const tenderHash = web3.utils.soliditySha3(
+      {
+        type: 'address',
+        value: trudamul.address,
+      },
+      {
+        type: 'uint256',
+        value: chainID,
+      },
       {
         type: 'bytes',
         value: exID,
+      },
+      {
+        type: 'bytes',
+        value: pPayID,
       },
       {
         type: 'uint256',
@@ -77,6 +99,14 @@ contract('PaymentsChannel', async (accounts) => {
       {
         type: 'bytes',
         value: pURI,
+      },
+      {
+        type: 'address',
+        value: mule,
+      },
+      {
+        type: 'bytes',
+        value: balanceProofHash,
       }
     );
     let senderTenderSignature = await web3.eth.sign(tenderHash, sender);
@@ -84,27 +114,16 @@ contract('PaymentsChannel', async (accounts) => {
       senderTenderSignature.substr(0, 130) +
       (senderTenderSignature.substr(130) == '00' ? '1b' : '1c');
 
-    const muleHash = web3.utils.soliditySha3({
-      type: 'address',
-      value: mule,
-    });
-    let senderMuleSignature = await web3.eth.sign(muleHash, sender);
-    senderMuleSignature =
-      senderMuleSignature.substr(0, 130) +
-      (senderMuleSignature.substr(130) == '00' ? '1b' : '1c');
-
-    await token.transfer(TruDaMul.address, 10, {
-      from: sender,
-    });
-
     const res = await trudamul.submitTender(
+      chainID,
       exID,
+      pPayID,
       100,
       1,
       pURI,
-      senderTenderSignature,
       mule,
-      senderMuleSignature,
+      balanceProofHash,
+      senderTenderSignature,
       mule,
       {
         from: mule,
@@ -116,10 +135,26 @@ contract('PaymentsChannel', async (accounts) => {
     const token = await MuleToken.deployed();
     const trudamul = await TruDaMul.deployed();
 
+    await token.transfer(TruDaMul.address, 200, {
+      from: sender,
+    });
+
     const tenderHash = web3.utils.soliditySha3(
+      {
+        type: 'address',
+        value: trudamul.address,
+      },
+      {
+        type: 'uint256',
+        value: chainID,
+      },
       {
         type: 'bytes',
         value: exID,
+      },
+      {
+        type: 'bytes',
+        value: pPayID,
       },
       {
         type: 'uint256',
@@ -132,6 +167,14 @@ contract('PaymentsChannel', async (accounts) => {
       {
         type: 'bytes',
         value: pURI,
+      },
+      {
+        type: 'address',
+        value: mule,
+      },
+      {
+        type: 'bytes',
+        value: balanceProofHash,
       }
     );
     let senderTenderSignature = await web3.eth.sign(tenderHash, sender);
@@ -139,27 +182,16 @@ contract('PaymentsChannel', async (accounts) => {
       senderTenderSignature.substr(0, 130) +
       (senderTenderSignature.substr(130) == '00' ? '1b' : '1c');
 
-    const muleHash = web3.utils.soliditySha3({
-      type: 'address',
-      value: mule,
-    });
-    let senderMuleSignature = await web3.eth.sign(muleHash, sender);
-    senderMuleSignature =
-      senderMuleSignature.substr(0, 130) +
-      (senderMuleSignature.substr(130) == '00' ? '1b' : '1c');
-
-    await token.transfer(TruDaMul.address, 200, {
-      from: sender,
-    });
-
     const res = await trudamul.submitTender(
+      chainID,
       exID,
+      pPayID,
       100,
       1,
       pURI,
-      senderTenderSignature,
       mule,
-      senderMuleSignature,
+      balanceProofHash,
+      senderTenderSignature,
       proxy,
       {
         from: proxy,
@@ -240,7 +272,6 @@ contract('PaymentsChannel', async (accounts) => {
   it('mule2 sumbits payments', async () => {
     const token = await MuleToken.deployed();
     const trudamul = await TruDaMul.deployed();
-    const pPayID = web3.utils.asciiToHex('0002');
 
     const paymentsHash = web3.utils.soliditySha3(
       {

@@ -66,31 +66,31 @@ contract TruDaMul {
     }
 
     function submitTender(
+        uint256 chainID,
         bytes memory exID,
+        bytes memory pPayID,
         uint256 senderOffer,
         uint256 idx,
         bytes memory pURI,
-        bytes memory senderTenderSignature,
         address mule,
-        bytes memory senderMuleSignature,
+        bytes memory balanceProofHash,
+        bytes memory senderTenderSignature,
         address authorized
     ) public {
         // Tender signature check
         address extractedSender = extractTenderSignature(
+            address(this),
+            chainID,
             exID,
+            pPayID,
             senderOffer,
             idx,
             pURI,
+            mule,
+            balanceProofHash,
             senderTenderSignature
         );
         require(_sender == extractedSender, "TruDaMul: Invalid signature");
-
-        // Mule address signature check
-        address extractedSender2 = extractMuleSignature(
-            mule,
-            senderMuleSignature
-        );
-        require(_sender == extractedSender2, "TruDaMul: Invalid signature");
 
         // Allow mule state channel payment
         _allowMulePayment(mule, exID);
@@ -132,6 +132,8 @@ contract TruDaMul {
         uint256 exIDIndex = tendersByexID[exID];
         require(exIDIndex > 0, "TruDaMul: Invalid exID");
 
+        bool flag;
+
         // Payments signature check
         address extractedSender = extractPaymentsSignature(
             exID,
@@ -139,20 +141,23 @@ contract TruDaMul {
             pPayID,
             senderSignature
         );
-        if (_sender == extractedSender) {
-            // Pay proxy
-            Tender storage t = tenders[exIDIndex];
-            _token.transfer(t.authorized, t.senderOffer);
-            _openTendersOffers -= t.senderOffer;
-            t.fulfilled = true;
-        } else {
+        if (_sender != extractedSender) {
             // Mule address signature check
             address extractedSender2 = extractMuleSignature(
                 mule,
                 senderSignature
             );
             require(_sender == extractedSender2, "TruDaMul: Invalid signature");
+            flag = true;
         }
+
+        Tender storage t = tenders[exIDIndex];
+        if (!flag) {
+            // Pay proxy
+            _token.transfer(t.authorized, t.senderOffer);
+        }
+        _openTendersOffers -= t.senderOffer;
+        t.fulfilled = true;
 
         // Allow mule state channel payment
         _allowMulePayment(mule, exID);
@@ -163,20 +168,38 @@ contract TruDaMul {
      * @return Address of the tender signer.
      */
     function extractTenderSignature(
+        address scAddress,
+        uint256 chainID,
         bytes memory exID,
+        bytes memory pPayID,
         uint256 senderOffer,
         uint256 idx,
         bytes memory pURI,
-        bytes memory senderSignature
+        address mule,
+        bytes memory balanceProofHash,
+        bytes memory senderTenderSignature
     ) public pure returns (address) {
         // Compute message hash
         bytes32 hash = keccak256(
-            abi.encodePacked(exID, senderOffer, idx, pURI)
+            abi.encodePacked(
+                scAddress,
+                chainID,
+                exID,
+                pPayID,
+                senderOffer,
+                idx,
+                pURI,
+                mule,
+                balanceProofHash
+            )
         );
 
         // Derive address from signature
         return
-            ECDSA.recover(ECDSA.toEthSignedMessageHash(hash), senderSignature);
+            ECDSA.recover(
+                ECDSA.toEthSignedMessageHash(hash),
+                senderTenderSignature
+            );
     }
 
     /**
