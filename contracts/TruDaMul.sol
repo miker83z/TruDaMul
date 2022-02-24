@@ -30,6 +30,7 @@ contract TruDaMul {
         uint256 gracePeriodEnd;
         bool fulfilled;
         bytes exID;
+        bytes pPayID;
         uint256 senderOffer;
         uint256 idx;
         bytes pURI;
@@ -38,6 +39,7 @@ contract TruDaMul {
     event TenderAnnouncement(
         uint256 gracePeriodEnd,
         bytes indexed exID,
+        bytes indexed pPayID,
         uint256 senderOffer,
         uint256 idx,
         bytes indexed pURI,
@@ -53,6 +55,7 @@ contract TruDaMul {
     }
     struct Payment {
         bytes exID;
+        bytes balanceProofHash;
         bool paid;
     }
 
@@ -66,7 +69,6 @@ contract TruDaMul {
     }
 
     function submitTender(
-        uint256 chainID,
         bytes memory exID,
         bytes memory pPayID,
         uint256 senderOffer,
@@ -80,7 +82,7 @@ contract TruDaMul {
         // Tender signature check
         address extractedSender = extractTenderSignature(
             address(this),
-            chainID,
+            block.chainid,
             exID,
             pPayID,
             senderOffer,
@@ -93,18 +95,17 @@ contract TruDaMul {
         require(_sender == extractedSender, "TruDaMul: Invalid signature");
 
         // Allow mule state channel payment
-        _allowMulePayment(mule, exID);
+        _allowMulePayment(mule, exID, balanceProofHash);
 
         // Check balance
         if (
-            _token.balanceOf(address(this)) - _openTendersOffers < senderOffer
+            _token.balanceOf(address(this)) - _openTendersOffers >= senderOffer
         ) {
-            return;
-        } else {
             tendersByexID[exID] = ++tendersNum;
             Tender storage t = tenders[tendersNum];
             t.gracePeriodEnd = block.timestamp + _tenderGracePeriod;
             t.exID = exID;
+            t.pPayID = pPayID;
             t.senderOffer = senderOffer;
             t.idx = idx;
             t.pURI = pURI;
@@ -115,6 +116,7 @@ contract TruDaMul {
             emit TenderAnnouncement(
                 t.gracePeriodEnd,
                 exID,
+                pPayID,
                 senderOffer,
                 idx,
                 pURI,
@@ -125,6 +127,7 @@ contract TruDaMul {
 
     function submitPayment(
         bytes memory exID,
+        bytes memory balanceProofHash,
         address mule,
         bytes memory pPayID,
         bytes memory senderSignature
@@ -137,6 +140,7 @@ contract TruDaMul {
         // Payments signature check
         address extractedSender = extractPaymentsSignature(
             exID,
+            balanceProofHash,
             mule,
             pPayID,
             senderSignature
@@ -144,6 +148,8 @@ contract TruDaMul {
         if (_sender != extractedSender) {
             // Mule address signature check
             address extractedSender2 = extractMuleSignature(
+                exID,
+                balanceProofHash,
                 mule,
                 senderSignature
             );
@@ -160,7 +166,7 @@ contract TruDaMul {
         t.fulfilled = true;
 
         // Allow mule state channel payment
-        _allowMulePayment(mule, exID);
+        _allowMulePayment(mule, exID, balanceProofHash);
     }
 
     /**
@@ -206,13 +212,16 @@ contract TruDaMul {
      * @notice Returns the address extracted from the mule address signature.
      * @return Address of the mule address signer.
      */
-    function extractMuleSignature(address mule, bytes memory senderSignature)
-        public
-        pure
-        returns (address)
-    {
+    function extractMuleSignature(
+        bytes memory exID,
+        bytes memory balanceProofHash,
+        address mule,
+        bytes memory senderSignature
+    ) public pure returns (address) {
         // Compute message hash
-        bytes32 hash = keccak256(abi.encodePacked(mule));
+        bytes32 hash = keccak256(
+            abi.encodePacked(exID, balanceProofHash, mule)
+        );
 
         // Derive address from signature
         return
@@ -225,23 +234,31 @@ contract TruDaMul {
      */
     function extractPaymentsSignature(
         bytes memory exID,
+        bytes memory balanceProofHash,
         address mule,
         bytes memory pPayID,
         bytes memory senderSignature
     ) public pure returns (address) {
         // Compute message hash
-        bytes32 hash = keccak256(abi.encodePacked(exID, mule, pPayID));
+        bytes32 hash = keccak256(
+            abi.encodePacked(exID, balanceProofHash, mule, pPayID)
+        );
 
         // Derive address from signature
         return
             ECDSA.recover(ECDSA.toEthSignedMessageHash(hash), senderSignature);
     }
 
-    function _allowMulePayment(address mule, bytes memory exID) private {
+    function _allowMulePayment(
+        address mule,
+        bytes memory exID,
+        bytes memory balanceProofHash
+    ) private {
         MulePayments storage p = mulePayments[mule];
         if (p.paymentsByexID[exID] == 0) {
             p.paymentsByexID[exID] = ++p.paymentsNum;
             p.payments[p.paymentsNum].exID = exID;
+            p.payments[p.paymentsNum].balanceProofHash = balanceProofHash;
         }
         p.payments[p.paymentsByexID[exID]].paid = true;
     }

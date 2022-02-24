@@ -101,6 +101,7 @@ contract StateChannel {
         require(receiver == receiverAddr);
 
         require(TruDaMul(truDaMulContract).checkMulePayment(receiver, eID));
+        //TODO check balance proof hash
 
         // Both signatures have been verified and the channel can be closed.
         _closeChannel(senderAddr, receiverAddr, blockNumber, balance);

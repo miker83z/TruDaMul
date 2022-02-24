@@ -115,7 +115,6 @@ contract('PaymentsChannel', async (accounts) => {
       (senderTenderSignature.substr(130) == '00' ? '1b' : '1c');
 
     const res = await trudamul.submitTender(
-      chainID,
       exID,
       pPayID,
       100,
@@ -183,7 +182,6 @@ contract('PaymentsChannel', async (accounts) => {
       (senderTenderSignature.substr(130) == '00' ? '1b' : '1c');
 
     const res = await trudamul.submitTender(
-      chainID,
       exID,
       pPayID,
       100,
@@ -279,6 +277,10 @@ contract('PaymentsChannel', async (accounts) => {
         value: exID,
       },
       {
+        type: 'bytes',
+        value: balanceProofHash,
+      },
+      {
         type: 'address',
         value: mule2,
       },
@@ -294,6 +296,7 @@ contract('PaymentsChannel', async (accounts) => {
 
     const res = await trudamul.submitPayment(
       exID,
+      balanceProofHash,
       mule2,
       pPayID,
       senderPaymentsSignature,
